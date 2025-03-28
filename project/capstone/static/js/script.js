@@ -85,8 +85,8 @@ document.getElementById("confirmUpload").addEventListener("click", function () {
   const formData = new FormData();
   formData.append("file", file);
 
-  // /api/decompile 엔드포인트로 파일 전송 (백엔드에서 디컴파일 수행)
-  fetch("/api/decompile/", {
+  // /capstone/api/decompile 엔드포인트로 파일 전송 (백엔드에서 디컴파일 수행)
+  fetch("/capstone/api/decompile/", {
     method: "POST",
     body: formData,
     headers: {
@@ -95,6 +95,12 @@ document.getElementById("confirmUpload").addEventListener("click", function () {
   })
     .then((response) => response.json())
     .then((data) => {
+      if(data.error){
+            alert(data.error);
+            document.getElementById("upload-section").style.display = "block";
+            document.getElementById("processing-section").style.display = "none";
+	    return;
+      }
       window.decompiledCode = data.decompiledCode;
 
       // 진행중 섹션 숨기고 분석 옵션 선택 섹션 표시
@@ -104,7 +110,7 @@ document.getElementById("confirmUpload").addEventListener("click", function () {
       document.getElementById("result-section").style.display = "block";
       document.getElementById("upload-section").style.display = "none";
       if (data.downloadUrl) {
-        //document.getElementById("downloadLink").href = data.downloadUrl;
+        document.getElementById("downloadLink").href = data.downloadUrl;
       }
     })
     .catch((err) => {
@@ -117,7 +123,7 @@ document.getElementById("confirmUpload").addEventListener("click", function () {
 
 // CodeQL 분석 선택
 document.getElementById("runCodeQL").addEventListener("click", function () {
-  fetch("/api/codeql", {
+  fetch("/capstone/api/codeql", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -144,7 +150,7 @@ document.getElementById("runCodeQL").addEventListener("click", function () {
 
 // 퍼징 실행 선택
 document.getElementById("runFuzzing").addEventListener("click", function () {
-  fetch("/api/fuzzing", {
+  fetch("/capstone/api/fuzzing", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
