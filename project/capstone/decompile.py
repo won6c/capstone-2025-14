@@ -1,9 +1,13 @@
+import sys
+sys.path.append('/home/user/codebugger')
 import os
 import io
 import subprocess
 from django.http import JsonResponse
 from django.conf import settings
 from elftools.elf.elffile import ELFFile
+from LLM4Module.Analyzer import *
+from LLM4Module.Decompiler import *
 
 def is_elf(file_bytes):
     if len(file_bytes) < 4:
@@ -26,10 +30,12 @@ def decompile(request):
         
         file_bytes = uploaded_file.read()
 
+        #elf파일인지 확인
         if not is_elf(file_bytes):
             print("Not ELF file")
             return JsonResponse({"error": "Please upload ELF file"}, status=400)
 
+        #symbol table이 존재하는지 확인
         if not has_symbols(file_bytes):
             print("No symbol table")
             return JsonResponse({"error": "Please upload file with symbol table"}, status=400)
@@ -48,6 +54,7 @@ def decompile(request):
                 os.makedirs(upload_dir)
                 print(f"Created directory: {upload_dir}")
 
+            #media/downloads 폴더 생성
             if not os.path.exists(download_dir):
                 os.makedirs(download_dir)
                 print(f"Created directory: {download_dir}")
@@ -57,23 +64,18 @@ def decompile(request):
                 for chunk in uploaded_file.chunks():
                     destination.write(chunk)
             
+            #파일 권한 수정
             os.chmod(file_path,0o600)
             
             print(f"Changed file({file_path}) access permission")
 
-#            if not is_elf(file_path):
-#                print("No symbol table")
-#                return JsonResponse({"error":"Please upload ELF file"},status=400)
-
-#            if not has_symbols(file_path):
-#                print("No symbol table")
-#                return JsonResponse({"error":"Please upload file with symbol table"})
-
             print(f"File saved successfully: {file_path}")
             
+            #디컴파일 실행
             decompiled_code = run_decompiler(file_path)
             print(f"Decompilation completed, code length: {len(decompiled_code)}")
             
+            #성공 시 반환
             return JsonResponse({
                 "decompiledCode": decompiled_code,
                 "downloadUrl": f"/capstone/api/download/{uploaded_file.name}.c"
@@ -83,39 +85,28 @@ def decompile(request):
             return JsonResponse({"error": str(e)}, status=500)
     return JsonResponse({"error": "Invalid request"}, status=400)
 
-def run_decompiler(file_path):
+def run_decompiler(file_path):#def tmp(file_path):
     decompiled_output = f"{file_path}.c"
-    decompiled_output = decompiled_output.replace("uploads","downloads")
-    print(f"Decompiled output path: {decompiled_output}")
-    
-    # 예시 파일 경로를 요청한 경로로 변경
-    example_path = "/home/user/idea101/project/capstone/llm4decompile/bof.c"
-    
-    # 예시 파일 존재 확인
-    if not os.path.exists(example_path):
-        print(f"Warning: Example file {example_path} does not exist")
-        # 대체 경로 시도 (프로젝트 내부에서 상대 경로 사용)
-        example_path = os.path.join(settings.BASE_DIR, "capstone", "llm4decompile", "bof.c")
-        print(f"Trying alternative path: {example_path}")
-        
-        if not os.path.exists(example_path):
-            print(f"Alternative path also does not exist")
-            return "Example decompiled code (example file not found)"
-    
-    # 명령어 실행 (check=True: 실패 시 예외 발생)
-    command = f"cp {example_path} {decompiled_output}"
-    print(f"Executing command: {command}")
-    
+    decompiled_output_to_move = decompiled_output.replace("uploads","downloads")
+    print(f"Decompiled output path: {decompiled_output_to_move}")
+
     try:
-        subprocess.run(command, shell=True, check=True)
-        print(f"Command executed successfully")
+        #LLM decompile 실행
+        test = GhidraAnalyzer(file_path=file_path,
+                              ghidra_path="/home/user/ghidra_11.0.3_PUBLIC/support/analyzeHeadless",
+                              decompile_script="/home/user/codebugger/LLM4Module/decompile.py",
+                              parse_script="/home/user/codebugger/LLM4Module/parse_global.py",)
+        test.decompile()
+
+        decompiler = GhidraDecompiler(model_path="/home/user/codebugger/llm4decompile-22b-v2", analyzer=test)
+        decompiler.decompile(output_path=decompiled_output_to_move)
     except subprocess.CalledProcessError as e:
         print(f"Command execution failed: {str(e)}")
-        return "Failed to execute decompiler command"
+        return "Failed to execute decompiler mv_cmd"
     
-    if os.path.exists(decompiled_output):
+    if os.path.exists(decompiled_output_to_move):
         try:
-            with open(decompiled_output, "r") as f:
+            with open(decompiled_output_to_move, "r") as f:
                 content = f.read()
                 print(f"Read {len(content)} bytes from output file")
                 return content
@@ -123,6 +114,7 @@ def run_decompiler(file_path):
             print(f"Error reading output file: {str(e)}")
             return f"Failed to read decompiled file: {str(e)}"
     else:
-        print(f"Output file does not exist: {decompiled_output}")
+        print(f"Output file does not exist: {decompiled_output_to_move}")
     
     return "Failed to decompile"
+    

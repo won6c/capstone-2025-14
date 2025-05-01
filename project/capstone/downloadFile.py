@@ -5,7 +5,7 @@ from django.conf import settings
 
 @csrf_exempt
 def download_decompiled_file(request, filename):
-    # MEDIA_ROOT/uploads 폴더의 절대 경로 구성 (/app/idea101/media/uploads/filename.c)
+    # MEDIA_ROOT/downloads 폴더의 절대 경로 구성
     file_path = os.path.join(settings.MEDIA_ROOT, "downloads", filename)
     
     if os.path.exists(file_path):
